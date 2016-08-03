@@ -16,7 +16,7 @@ function Connect-Syncplify {
     [CmdletBinding()]
     param(
     [Parameter(mandatory=$true)]
-    [ValidateScript({ test-Connection $_ -quiet -count 1 })]
+    [ValidateScript({ test-Connection $_ -quiet -count 1})]
     [string]$Server,
     [string]$Port = '4443',
     [string]$VirtualServer = 'default',
@@ -26,9 +26,6 @@ function Connect-Syncplify {
 
     ## Declares the global variable to store the url of the server to be authenticated with
     $global:url = "https://$($server):$($port)/smserver-$($VirtualServer)"
-
-    ## Clears SyncplifyAuthResult of any existing value
-    $global:SyncplifyAuthResult = $null
 
     ## Checks if the username or password is not present and prompt for secure credentials
     if ([string]::IsNullOrEmpty($User) -or [string]::IsNullOrEmpty($Password)){
@@ -52,7 +49,7 @@ function Connect-Syncplify {
 
     ## Sends auth request to the server and stores the result in the variable $SyncplifyAuthResult for use by other functions
     Write-Verbose -Message "Invoke-RestMethod -Method get -Uri $($url)/auth -ContentType application/json -Headers $($headers)"
-    $SyncplifyAuthResult = Invoke-RestMethod -Method get -Uri $url"/auth" -ContentType "application/json" -Headers $headers
+    $global:SyncplifyAuthResult = Invoke-RestMethod -Method get -Uri $url"/auth" -ContentType "application/json" -Headers $headers
 
         } ## End try
 
@@ -146,20 +143,30 @@ function Set-SyncplifyConfig {
 
     [CmdletBinding()]
     param(
-    [string]$Config
+    [Parameter(Mandatory=$true)]
+    [ValidateScript({ test-path -Path $_ })]
+    [string]$Path
     )
 
-    #$newconfig = get-content C:\Users\parrishk\desktop\parrishk.txt
-    #$newconfig = $newconfig | convertfrom-json
-    #$newconfig = ConvertTo-Json -InputObject @($newconfig)
+    $body = Get-Content -Path $Path | ConvertFrom-Json
+    $Body = ConvertTo-Json -InputObject @($body)
+
 
     try {
 
-    Invoke-RestMethod -Method POST -uri $url"/sms.SaveConf" -ContentType "application/json" -body $config -Headers @{"Authorization" = "Bearer $($SyncplifyAuthResult.access_token)"}
+    $result = Invoke-RestMethod -Method POST -uri $url"/sms.SaveConf" -ContentType "application/json" -body $Body -Headers @{"Authorization" = "Bearer $($SyncplifyAuthResult.access_token)"}
 
-    } catch {}
+    } catch {
 
+            ## If error 403 received, the following is written to the host
+            if ($_.Exception.MEssage -match "403") {Write-Error "ACCESS DENIED: You must authenticate with the Syncplify server before proceeding."}
 
+            ## Stops the processing
+            return
+
+    }
+
+    Write-Host -BackgroundColor DarkGreen "Configuration has been saved"
 
 } ## End function Set-SyncplifyConfig
 
@@ -218,7 +225,8 @@ function Get-SyncplifyUser {
         }
 
         ## Returns the result of the request
-        return $Result[0].Result
+        return $Result = New-Object PSObject -Verbose $Result[0].Result
+
 } ## End function Get-SyncplifyUser
 
 function Get-SyncplifyVFS {
@@ -285,7 +293,8 @@ function Get-SyncplifyVFS {
 
     }
 
-    return $Result[0].Result
+    return $Result = New-Object PSObject -Verbose $Result[0].Result
+
 } ## End function Get-SyncplifyVFS
 
 function Delete-SyncplifyUser {
@@ -328,6 +337,25 @@ function Delete-SyncplifyUser {
 
 function Get-SyncplifyPassUtil {
 
+    <#
+    .SYNOPSIS
+        Used to generate and verify passwords
+    .EXAMPLE
+    PS>>$generated = Get-SyncplifyPassUtil -Password '123' -Command Generate
+    .EXAMPLE
+    PS>>Get-SyncplifyPassUtil -salt $generated.salt -PassHash $generated.PassHash -Password '123' -Command Verify
+    .PARAMETER Password
+        Password to generate a hash for or verify
+    .PARAMETER Command
+        Generate or Verify
+    .PARAMETER Salt
+        Salst of password
+    .PARAMETER PassHash
+        Hashed password
+    .PARAMETER VServer
+        Virtual server to verify password against
+    #>
+
     [CmdletBinding()]
     param(
     [parameter(mandatory)]
@@ -340,65 +368,89 @@ function Get-SyncplifyPassUtil {
     [string]$VServer = 'default'
     )
 
+    ## Define header section
     $headers = @{
     Authorization = "Bearer $($SyncplifyAuthResult.access_token)"
     Accept = "*/*"
     }
 
+    ## Start processing
     try {
 
+    ## Switch based on Command parameter
     switch ($Command) {
 
         'Generate' {
     $body = ,@{command = "generate";password = "$Password"}
+    $body = ConvertTo-Json -InputObject @($body)
 
-    $global:hash = Invoke-RestMethod -Method POST -uri $url"/sms.PassUtil" -ContentType "application/json" -body (ConvertTo-Json $body) -Headers $headers
+    $global:hash = Invoke-RestMethod -Method POST -uri $url"/sms.PassUtil" -ContentType "application/json" -body $Body -Headers $headers
     return $hash[0].result
     }
 
         'Verify' {
     $body = ,@{command = "verify";password = "$Password";salt = "$Salt";PassHash = "$PassHash";Vserver = "$VServer"}
-    $global:hash = Invoke-RestMethod -Method POST -uri $url"/sms.PassUtil" -ContentType "application/json" -body (ConvertTo-Json $body) -Headers $headers
-    return $hash[0].result
+    $body = ConvertTo-Json @($body)
+    $Result = Invoke-RestMethod -Method POST -uri $url"/sms.PassUtil" -ContentType "application/json" -body $Body -Headers $headers
+
     }
     }
 
     } catch {if ($_.Exception.MEssage -match "403") {Write-Error "ACCESS DENIED: You must authenticate with the Syncplify server before proceeding."}
     }
+
+    return Write-Host -BackgroundColor DarkGreen "$($Result[0].Result.ResultMsg)"
 
 } ## End function Get-SyncplifyPassUtil
 
 function Get-SyncplifyNode {
 
     [CmdletBinding()]
+    param()
 
+    ## Define header section
     $headers = @{
     Authorization = "Bearer $($SyncplifyAuthResult.access_token)"
     Accept = "*/*"
     }
 
+    ## Start processing
     try {
 
     $body = ,@{}
-    $NodeList = Invoke-RestMethod -Method POST -uri $url"/sms.ReadNodeList" -ContentType "application/json" -body (ConvertTo-Json $body) -Headers $headers
-    $nodelist[0].Result
+    $body = ConvertTo-Json -InputObject @($body)
 
-    } catch {if ($_.Exception.MEssage -match "403") {Write-Error "ACCESS DENIED: You must authenticate with the Syncplify server before proceeding."}
+    $Result = Invoke-RestMethod -Method POST -uri $url"/sms.ReadNodeList" -ContentType "application/json" -body $Body -Headers $headers
+
+
     }
+
+    ## Catch any errors
+    catch {if ($_.Exception.MEssage -match "403") {Write-Error "ACCESS DENIED: You must authenticate with the Syncplify server before proceeding."}
+    }
+
+    ## Return result
+    return $Result = New-Object PSObject -Verbose $Result[0].Result
 
 } ## End function Get-SyncplifyNode
 
 function Get-SyncplifySessions {
 
     [CmdletBinding()]
+    param(
+    [switch]$All,
+    [String]$NodeID
+    )
 
     $headers = @{
     Authorization = "Bearer $($SyncplifyAuthResult.access_token)"
     Accept = "*/*"
     }
 
+    ## Begin processing
     try {
 
+    ## Declares the JSON array to be used as the body
     $nodelist = @"
     [
         {
@@ -409,27 +461,26 @@ function Get-SyncplifySessions {
     ]
 "@ | Convertfrom-json
 
+    ## Retrieves a list of current nodes for the virtual server
     $nodes = Get-SyncplifyNode
 
+    ## For each node retrieved it will be added to the $Nodelist JSON array
     foreach ($node in $nodes[0]) {
         $nodelist[0].nodes += $node._id
     }
 
-
+    ## Converts the array to JSON
     $body = ConvertTo-Json @($nodelist)
 
-    $global:Sessions = Invoke-RestMethod -Method POST -uri $url"/sms.GetSession" -ContentType "application/json" -body $body -Headers $headers
-    return $Sessions[0].result
+    ## Sends the API request to the server
+    $Result = Invoke-RestMethod -Method POST -uri $url"/sms.GetSession" -ContentType "application/json" -body $body -Headers $headers
 
 
-    } catch {if ($_.Exception.Message -match "403") {Write-Error "ACCESS DENIED: You must authenticate with the Syncplify server before proceeding."}}
+    }
+    ## Checks for errors
+    catch {if ($_.Exception.Message -match "403") {Write-Error "ACCESS DENIED: You must authenticate with the Syncplify server before proceeding."}}
 
+    ## Returns a list of active sessions
+    return $Result = New-Object PSObject -Verbose $Result[0].Result
 
 } ## End function Get-SyncplifySessions
-
-Export-ModuleMember -Function Connect-Syncplify
-Export-ModuleMember -Function Disconnect-Syncplify
-Export-ModuleMember -Function Get-SyncplifyConfig
-Export-ModuleMember -Function Get-SyncplifyUser
-Export-ModuleMember -Function Get-SyncplifyVFS
-Export-ModuleMember -Function Delete-SyncplifyUser
