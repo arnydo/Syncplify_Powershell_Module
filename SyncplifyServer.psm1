@@ -15,14 +15,16 @@
 
     [CmdletBinding()]
     param(
+    
     [string]$Server,
     [string]$Port = '4443',
+    [string]$VirtualServer = 'default',
     [string]$User,
     [string]$Password
     )
 
     ## Declares the global variable to store the url of the server to be authenticated with
-    $global:url = "https://$($server):$($port)/smserver-default"
+    $global:url = "https://$($server):$($port)/smserver-$($VirtualServer)"
 
     ## Checks if the username or password is not present and prompt for secure credentials
     if ($User.Length -eq 0 -or $Password.Length -eq 0){
@@ -30,7 +32,7 @@
         $user = $credentials.UserName
         $password = $credentials.GetNetworkCredential().Password
     }
- 
+
     ## Concatenates the username and password into a base64 encoded string
     $userpass = $user+":"+$Password
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($userpass)
@@ -42,22 +44,22 @@
         }
 
     ## Begins the main call to the server with supplied information
-    try { 
+    try {
 
     ## Sends auth request to the server and stores the result in the variable $SyncplifyAuthResult for use by other functions
     Write-Verbose -Message "Invoke-RestMethod -Method get -Uri $($url)/auth -ContentType application/json -Headers $($headers)"
     $global:SyncplifyAuthResult = Invoke-RestMethod -Method get -Uri $url"/auth" -ContentType "application/json" -Headers $headers
 
         } ## End try
-        
+
   catch {
 
              ## Checks to see if the authentication failed due to incorrect connection details
              if ( $($_.Exception.Message) -match "400") { Write-Error -Message "Failed to authenticate with $server. Please verify connection details and try again." }
-             
+
              ## If authentication fails the function stops processing
              return
-        
+
         } ## End Catch
 
         ## Upon successful connection, the following is written to the host
@@ -84,7 +86,7 @@ function Disconnect-Syncplify {
     Invoke-RestMethod -Method get -Uri $url"/sms.Disconnect" -ContentType "application/json" -Headers @{"Authorization" = "Bearer $($SyncplifyAuthResult.access_token)"}
 
     } catch {
-        
+
         ## Checks to see if there were no active connections to $url
         if ($($_.Exception.Message) -match "403") { Write-Error -Message "There is not an active connection to $Url" }
 
@@ -92,7 +94,7 @@ function Disconnect-Syncplify {
         return
 
     }
-    
+
     ## Upon successful disconnection, the following is written to the host
     Write-Host -BackgroundColor DarkGreen "Disconnected from $url"
 
@@ -116,12 +118,12 @@ function Get-SyncplifyConfig {
 
     ## Begin processing
     try {
-    
+
     ## Send POST to $url
     $Result = Invoke-RestMethod -Method POST -uri $url"/sms.LoadConf" -ContentType "application/json" -body $body -Headers @{"Authorization" = "Bearer $($SyncplifyAuthResult.access_token)"}
-    
-    } 
-    
+
+    }
+
     ## Checks for any errors
     catch {
             ## If error 403 received, the following is written to the host
@@ -129,9 +131,9 @@ function Get-SyncplifyConfig {
 
             ## Stops the processing
             return
-    } 
-     
-    ## Returns the config   
+    }
+
+    ## Returns the config
     return $Result[0].Result
 
 } ## End function Get-SyncplifyConfig
@@ -150,7 +152,7 @@ function Set-SyncplifyConfig {
     try {
 
     Invoke-RestMethod -Method POST -uri $url"/sms.SaveConf" -ContentType "application/json" -body $config -Headers @{"Authorization" = "Bearer $($SyncplifyAuthResult.access_token)"}
-  
+
     } catch {}
 
 
@@ -187,7 +189,7 @@ function Get-SyncplifyUser {
     }
 
     try {
-        
+
         ## If the -All parameter is used:
         if ($PSCmdlet.ParameterSetName -eq 'AllUsers') {
 
@@ -203,7 +205,7 @@ function Get-SyncplifyUser {
             }
 
         } catch {
-            
+
             ## Checks for errors
             if ($_.Exception.MEssage -match "403") {Write-Error "ACCESS DENIED: You must authenticate with the Syncplify server before proceeding."}
 
@@ -245,7 +247,7 @@ function Get-SyncplifyVFS {
     Authorization = "Bearer $($SyncplifyAuthResult.access_token)"
     Accept = "*/*"
     }
-    
+
     try{
 
     ## If -All switch is used:
@@ -269,7 +271,7 @@ function Get-SyncplifyVFS {
 
 
     } catch {
-    
+
             ## Checks for errors
             if ($_.Exception.MEssage -match "403") {Write-Error "ACCESS DENIED: You must authenticate with the Syncplify server before proceeding."}
             else {$_.Exception.Message}
@@ -306,7 +308,7 @@ function Delete-SyncplifyUser {
     $Result = Invoke-RestMethod -Method POST -uri $url"/sms.DeleteUser" -ContentType "application/json" -body $Body -Headers $headers
 
     } catch {
-        
+
         ## Checks for auth errors
         if ($_.Exception.Message -match "403") {Write-Error "ACCESS DENIED: You must authenticate with the Syncplify server before proceeding."}
 
@@ -372,7 +374,7 @@ function Get-SyncplifyNode {
     }
 
     try {
-    
+
     $body = ,@{}
     $NodeList = Invoke-RestMethod -Method POST -uri $url"/sms.ReadNodeList" -ContentType "application/json" -body (ConvertTo-Json $body) -Headers $headers
     $nodelist[0].Result
@@ -383,7 +385,7 @@ function Get-SyncplifyNode {
 } ## End function Get-SyncplifyNode
 
 function Get-SyncplifySessions {
-     
+
     [CmdletBinding()]
 
     $headers = @{
@@ -406,7 +408,7 @@ function Get-SyncplifySessions {
     $nodes = Get-SyncplifyNode
 
     foreach ($node in $nodes[0]) {
-        $nodelist[0].nodes += $node._id     
+        $nodelist[0].nodes += $node._id
     }
 
 
@@ -417,7 +419,7 @@ function Get-SyncplifySessions {
 
 
     } catch {if ($_.Exception.Message -match "403") {Write-Error "ACCESS DENIED: You must authenticate with the Syncplify server before proceeding."}}
-    
+
 
 } ## End function Get-SyncplifySessions
 
