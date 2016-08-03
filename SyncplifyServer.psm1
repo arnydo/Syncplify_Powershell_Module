@@ -1,4 +1,4 @@
-﻿function Connect-Syncplify {
+function Connect-Syncplify {
 
     <#
     .SYNOPSIS
@@ -15,7 +15,8 @@
 
     [CmdletBinding()]
     param(
-    
+    [Parameter(mandatory=$true)]
+    [ValidateScript({ test-Connection $_ -quiet -count 1 })]
     [string]$Server,
     [string]$Port = '4443',
     [string]$VirtualServer = 'default',
@@ -26,8 +27,11 @@
     ## Declares the global variable to store the url of the server to be authenticated with
     $global:url = "https://$($server):$($port)/smserver-$($VirtualServer)"
 
+    ## Clears SyncplifyAuthResult of any existing value
+    $global:SyncplifyAuthResult = $null
+
     ## Checks if the username or password is not present and prompt for secure credentials
-    if ($User.Length -eq 0 -or $Password.Length -eq 0){
+    if ([string]::IsNullOrEmpty($User) -or [string]::IsNullOrEmpty($Password)){
         $credentials = (get-credential)
         $user = $credentials.UserName
         $password = $credentials.GetNetworkCredential().Password
@@ -48,7 +52,7 @@
 
     ## Sends auth request to the server and stores the result in the variable $SyncplifyAuthResult for use by other functions
     Write-Verbose -Message "Invoke-RestMethod -Method get -Uri $($url)/auth -ContentType application/json -Headers $($headers)"
-    $global:SyncplifyAuthResult = Invoke-RestMethod -Method get -Uri $url"/auth" -ContentType "application/json" -Headers $headers
+    $SyncplifyAuthResult = Invoke-RestMethod -Method get -Uri $url"/auth" -ContentType "application/json" -Headers $headers
 
         } ## End try
 
