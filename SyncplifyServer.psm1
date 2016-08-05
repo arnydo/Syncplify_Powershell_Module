@@ -15,8 +15,17 @@
 
     [CmdletBinding()]
     param(
-    [Parameter(mandatory=$true)]
-    [ValidateScript({ test-Connection $_ -quiet -count 1})]
+    [Parameter(mandatory)]
+    [ValidateScript({
+        if (-not (test-Connection $_ -quiet -count 1))
+        {
+            throw "The server [$_] is offline. Try again."
+        }
+        else
+        {
+            $true
+        }
+    })]
     [string]$Server,
     [string]$Port = '4443',
     [string]$VirtualServer = 'default',
@@ -143,7 +152,7 @@ function Set-SyncplifyConfig {
 
     [CmdletBinding()]
     param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory)]
     [ValidateScript({ test-path -Path $_ })]
     [string]$Path
     )
@@ -356,15 +365,22 @@ function Get-SyncplifyPassUtil {
         Virtual server to verify password against
     #>
 
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'None')]
     param(
     [parameter(mandatory)]
     [string]$Password,
+
     [parameter(mandatory)]
     [ValidateSet('Generate','Verify')]
     [string]$Command,
+
+    [Parameter(ParameterSetName = 'Verify')]
     [string]$salt,
+
+    [Parameter(ParameterSetName = 'Verify')]
     [string]$PassHash,
+
+    [Parameter(ParameterSetName = 'Verify')]
     [string]$VServer = 'default'
     )
 
