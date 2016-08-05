@@ -1,4 +1,4 @@
-function Connect-Syncplify {
+﻿function Connect-Syncplify {
 
     <#
     .SYNOPSIS
@@ -56,7 +56,7 @@ function Connect-Syncplify {
   catch {
 
              ## Checks to see if the authentication failed due to incorrect connection details
-             if ( $($_.Exception.Message) -match "400") { Write-Error -Message "Failed to authenticate with $server. Please verify connection details and try again." }
+             if ( $($_.Exception.Message) -match "400") { Write-Error -Message "Failed to authenticate with $server. Please verify connection details and try again." } else { $_.Exception.Message }
 
              ## If authentication fails the function stops processing
              return
@@ -297,7 +297,7 @@ function Get-SyncplifyVFS {
 
 } ## End function Get-SyncplifyVFS
 
-function Delete-SyncplifyUser {
+function Remove-SyncplifyUser {
 
     Param (
     [Parameter(Mandatory)]
@@ -484,3 +484,15 @@ function Get-SyncplifySessions {
     return $Result = New-Object PSObject -Verbose $Result[0].Result
 
 } ## End function Get-SyncplifySessions
+
+## ALIASES
+New-Alias -Name Connect-SM -Value Connect-Syncplify
+New-Alias -Name Disconnect-SM -Value Disconnect-Syncplify
+New-Alias -Name Get-SMConfig -Value Get-SyncplifyConfig
+New-Alias -Name Set-SMConfig -Value Set-SyncplifyConfig
+New-Alias -Name Get-SMUser -Value Get-SyncplifyUser
+New-Alias -Name Get-SMVFS -Value Get-SyncplifyVFS
+New-Alias -Name Remove-SMUser -Value Remove-SyncplifyUser
+New-Alias -Name Get-SMPassUtil -Value Connect-Syncplify
+New-Alias -Name Get-SMNode -Value Connect-Syncplify
+New-Alias -Name Get-SMSessions -Value Get-SyncplifySessions
